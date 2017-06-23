@@ -1,0 +1,164 @@
+
+package com.zhiliaoapp.musically.musmedia.video;
+
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.os.Build;
+import android.text.TextPaint;
+
+import com.zhiliaoapp.musically.common.utils.FontUtils;
+import com.zhiliaoapp.musically.musmedia.utils.ActivityViewToImgUtils;
+
+import java.io.File;
+import java.util.Locale;
+
+/**
+ * Created by Ralph Jiang on 15/6/17.
+ */
+public class WatermarkBitmapHelper {
+
+    private static final int[] REFERENCE_16_9 = {
+            540, 960
+    };
+
+    private static final int REFERENCE_SPACING = 17;
+
+    /**
+     * 创建跟视频宽高一致的水印底图
+     *
+     * @param originalWidth  视频原始宽度
+     * @param originalHeight 视频原始高度
+     * @param requestWidth   视频输出宽度，在裁剪模式下应该是一个大于0的数值，拉伸模式或者默认模式（输出视频原始大小）应设置为-1
+     * @param requestHeight  视频输出高度，在裁剪模式下应该是一个大于0的数值，拉伸模式或者默认模式（输出视频原始大小）应设置为-1
+     * @param waterImage     水印bitmap
+     * @return
+     */
+    public static Bitmap createBottomBitmap(int originalWidth, int originalHeight,
+                                            int requestWidth, int requestHeight, Bitmap waterImage, String content) {
+        Bitmap bmp = createBitmap(originalWidth, originalHeight, requestWidth, requestHeight, waterImage, content);
+
+        if (isSAMSUNGS3()) {
+            return null;
+        } else {
+            return bmp;
+        }
+
+    }
+
+    /**
+     * 创建跟视频宽高一致的水印底图
+     *
+     * @param originalWidth  视频原始宽度
+     * @param originalHeight 视频原始高度
+     * @param requestWidth   视频输出宽度，在裁剪模式下应该是一个大于0的数值，拉伸模式或者默认模式（输出视频原始大小）应设置为-1
+     * @param requestHeight  视频输出高度，在裁剪模式下应该是一个大于0的数值，拉伸模式或者默认模式（输出视频原始大小）应设置为-1
+     * @param waterImage     水印bitmap
+     * @return
+     */
+    public static File createBottomBitmapFile(int originalWidth, int originalHeight,
+                                              int requestWidth, int requestHeight, Bitmap waterImage, String content) {
+        Bitmap bmp = createBitmap(originalWidth, originalHeight, requestWidth, requestHeight, waterImage, content);
+
+        return ActivityViewToImgUtils.savePic(bmp, "water", "water.png");
+    }
+
+    private static Bitmap createBitmap(int originalWidth, int originalHeight,
+                                       int requestWidth, int requestHeight, Bitmap waterImage, String content) {
+        int toLeft, toTop, toRight, toBottom;
+
+        int[] referenceArray = chooseReferenceArray(originalWidth, originalWidth);
+
+        if (requestHeight == -1) {
+            requestHeight = originalHeight;
+            requestWidth = originalWidth;
+        }
+
+        float waterPercent = requestWidth * 1.0f / referenceArray[0];
+        int waterWidth = Math.round(waterImage.getWidth() * waterPercent / 2);
+        int waterHeight = Math.round(waterImage.getHeight() * waterPercent / 2);
+        waterImage = waterImage.createScaledBitmap(waterImage, waterWidth, waterHeight, true);
+        if (null == referenceArray) {
+            throw new IllegalArgumentException(
+                    "the ratio of canvasWidth and canvasHeight is not support!");
+        }
+
+        Bitmap.Config conf = Bitmap.Config.ARGB_4444;
+        Bitmap bmp = Bitmap.createBitmap(originalWidth, originalHeight, conf);
+        Canvas canvas = new Canvas(bmp);
+        canvas.drawARGB(0, 0, 0, 0);
+        canvas.save();
+
+        int space = Math.round(REFERENCE_SPACING * waterPercent);
+        int heightCropDis = originalHeight - requestHeight;
+        int widthCropDis = originalWidth - requestWidth;
+        Rect dest;
+        toRight = (originalWidth - space - widthCropDis / 2);
+        toBottom = (originalHeight - space - heightCropDis / 2);
+        toLeft = (originalWidth - space - waterWidth - widthCropDis / 2);
+        toTop = (originalHeight - waterHeight - space - heightCropDis / 2);
+        dest = new Rect(toLeft, toTop, toRight, toBottom);
+
+
+        Paint paint = new Paint();
+        paint.setAntiAlias(true);
+        paint.setFilterBitmap(true);
+        paint.setAlpha(200);
+        canvas.drawBitmap(waterImage, null, dest, paint);
+
+        try {
+            // draw text
+            TextPaint textPaint = new TextPaint();
+            textPaint.setColor(Color.WHITE);
+            textPaint.setStyle(Paint.Style.FILL);
+            int textSize = 22;
+            textPaint.setTextSize(textSize);
+            textPaint.setTypeface(FontUtils.getInstance().getDefaultFont());
+            textPaint.setTextAlign(Paint.Align.RIGHT);
+            textPaint.setAlpha(200);
+            float textWidth = textPaint.measureText(content);
+            while (textWidth > canvas.getWidth()) {
+                textSize -= 1;
+                textPaint.setTextSize(textSize);
+                textWidth = textPaint.measureText(content);
+            }
+            int topPos = toTop + (toBottom - toTop) / 4;
+            canvas.drawText(content, toRight, topPos, textPaint);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        canvas.restore();
+
+        return bmp;
+    }
+
+    private static int[] chooseReferenceArray(int width, int height) {
+
+        return REFERENCE_16_9;
+    }
+
+
+    public static boolean isSAMSUNGS3() {
+        String str = (Build.MANUFACTURER + Build.MODEL).trim().toUpperCase(Locale.US);
+        if (str.contains("SAMSUNG")) {
+            if (str.contains("GT-I9300") || str.contains("GT-I9305") || str.contains("SM-G3812B")
+                    || str.contains("T-I8190") || str.contains("GT-I8190N")
+                    || str.contains("GT-I8200") || str.contains("SPH-L710") || str.contains("SGH-T999")
+                    || str.contains("SGH-I747") || str.contains("SCH-I535")
+                    ) {
+                return true;
+            } else {
+                return false;
+            }
+
+
+        } else {
+            return false;
+        }
+
+    }
+
+}
